@@ -21,6 +21,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.security.Principal;
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -38,7 +39,9 @@ import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 import org.openhab.core.auth.ManagedUser;
 import org.openhab.core.auth.User;
+import org.openhab.core.auth.UserApiToken;
 import org.openhab.core.auth.UserRegistry;
+import org.openhab.core.auth.UserSession;
 
 /**
  * Tests for {@link UserResource}.
@@ -360,11 +363,296 @@ public class UserResourceTest {
         verify(userRegistry, never()).remove(any());
     }
 
+    // --- GET /auth/users/sessions (all users) ---
+
+    @Test
+    public void testGetAllSessionsReturnsSessionsFromAllUsers() {
+        ManagedUser user1 = createManagedUserWithSessions("admin", 2);
+        ManagedUser user2 = createManagedUserWithSessions("john", 1);
+        when(userRegistry.getAll()).thenReturn(List.of(user1, user2));
+
+        Response response = userResource.getAllSessions(null, 0, 0, null, null);
+
+        assertThat(response.getStatus(), is(200));
+    }
+
+    @Test
+    public void testGetAllSessionsReturnsEmptyWhenNoSessions() {
+        ManagedUser user = createManagedUser("admin", Set.of("administrator"));
+        when(userRegistry.getAll()).thenReturn(List.of(user));
+
+        Response response = userResource.getAllSessions(null, 0, 0, null, null);
+
+        assertThat(response.getStatus(), is(200));
+    }
+
+    @Test
+    public void testGetAllSessionsPagination() {
+        ManagedUser user = createManagedUserWithSessions("admin", 5);
+        when(userRegistry.getAll()).thenReturn(List.of(user));
+
+        // Page 0 with length 2
+        Response response = userResource.getAllSessions(null, 0, 2, null, null);
+        assertThat(response.getStatus(), is(200));
+
+        // Page 1 with length 2
+        response = userResource.getAllSessions(null, 1, 2, null, null);
+        assertThat(response.getStatus(), is(200));
+    }
+
+    @Test
+    public void testGetAllSessionsNoPagingWhenPageLengthZero() {
+        ManagedUser user = createManagedUserWithSessions("admin", 3);
+        when(userRegistry.getAll()).thenReturn(List.of(user));
+
+        // pagelength 0 means return all
+        Response response = userResource.getAllSessions(null, 0, 0, null, null);
+        assertThat(response.getStatus(), is(200));
+    }
+
+    @Test
+    public void testGetAllSessionsFilterByUser() {
+        ManagedUser user1 = createManagedUserWithSessions("admin", 2);
+        ManagedUser user2 = createManagedUserWithSessions("john", 1);
+        when(userRegistry.getAll()).thenReturn(List.of(user1, user2));
+
+        Response response = userResource.getAllSessions("john", 0, 0, null, null);
+        assertThat(response.getStatus(), is(200));
+    }
+
+    @Test
+    public void testGetAllSessionsOrderBy() {
+        ManagedUser user = createManagedUserWithSessions("admin", 3);
+        when(userRegistry.getAll()).thenReturn(List.of(user));
+
+        Response response = userResource.getAllSessions(null, 0, 0, "createdTime", "asc");
+        assertThat(response.getStatus(), is(200));
+    }
+
+    // --- GET /auth/users/{userId}/sessions ---
+
+    @Test
+    public void testGetUserSessionsReturnsSessionsForUser() {
+        ManagedUser user = createManagedUserWithSessions("admin", 2);
+        when(userRegistry.get("admin")).thenReturn(user);
+
+        Response response = userResource.getUserSessions("admin");
+
+        assertThat(response.getStatus(), is(200));
+    }
+
+    @Test
+    public void testGetUserSessionsReturns404WhenUserNotFound() {
+        when(userRegistry.get("unknown")).thenReturn(null);
+
+        Response response = userResource.getUserSessions("unknown");
+
+        assertThat(response.getStatus(), is(404));
+    }
+
+    @Test
+    public void testGetUserSessionsReturns400WhenNotManagedUser() {
+        User mockUser = when(org.mockito.Mockito.mock(User.class).getName()).thenReturn("external").getMock();
+        when(userRegistry.get("external")).thenReturn(mockUser);
+
+        Response response = userResource.getUserSessions("external");
+
+        assertThat(response.getStatus(), is(400));
+    }
+
+    // --- DELETE /auth/users/{userId}/sessions/{sessionId} ---
+
+    @Test
+    public void testRevokeUserSessionSuccess() {
+        ManagedUser user = createManagedUserWithSessions("admin", 1);
+        when(userRegistry.get("admin")).thenReturn(user);
+        // session ID is "session-0-uuid...", prefix is "session-0"
+        // but our helper creates "sess0-xxxxx", so prefix is "sess0"
+
+        Response response = userResource.revokeUserSession("admin", "sess0");
+
+        assertThat(response.getStatus(), is(200));
+        verify(userRegistry).removeUserSession(eq(user), any(UserSession.class));
+    }
+
+    @Test
+    public void testRevokeUserSessionReturns404WhenUserNotFound() {
+        when(userRegistry.get("unknown")).thenReturn(null);
+
+        Response response = userResource.revokeUserSession("unknown", "sess0");
+
+        assertThat(response.getStatus(), is(404));
+        verify(userRegistry, never()).removeUserSession(any(), any());
+    }
+
+    @Test
+    public void testRevokeUserSessionReturns404WhenSessionNotFound() {
+        ManagedUser user = createManagedUserWithSessions("admin", 1);
+        when(userRegistry.get("admin")).thenReturn(user);
+
+        Response response = userResource.revokeUserSession("admin", "nonexistent");
+
+        assertThat(response.getStatus(), is(404));
+        verify(userRegistry, never()).removeUserSession(any(), any());
+    }
+
+    // --- GET /auth/users/apitokens (all users) ---
+
+    @Test
+    public void testGetAllApiTokensReturnsTokensFromAllUsers() {
+        ManagedUser user1 = createManagedUserWithTokens("admin", 2);
+        ManagedUser user2 = createManagedUserWithTokens("john", 1);
+        when(userRegistry.getAll()).thenReturn(List.of(user1, user2));
+
+        Response response = userResource.getAllApiTokens(null, 0, 0, null, null);
+
+        assertThat(response.getStatus(), is(200));
+    }
+
+    @Test
+    public void testGetAllApiTokensReturnsEmptyWhenNoTokens() {
+        ManagedUser user = createManagedUser("admin", Set.of("administrator"));
+        when(userRegistry.getAll()).thenReturn(List.of(user));
+
+        Response response = userResource.getAllApiTokens(null, 0, 0, null, null);
+
+        assertThat(response.getStatus(), is(200));
+    }
+
+    @Test
+    public void testGetAllApiTokensPagination() {
+        ManagedUser user = createManagedUserWithTokens("admin", 5);
+        when(userRegistry.getAll()).thenReturn(List.of(user));
+
+        // Page 0 with length 2
+        Response response = userResource.getAllApiTokens(null, 0, 2, null, null);
+        assertThat(response.getStatus(), is(200));
+
+        // Page 1 with length 2
+        response = userResource.getAllApiTokens(null, 1, 2, null, null);
+        assertThat(response.getStatus(), is(200));
+    }
+
+    @Test
+    public void testGetAllApiTokensNoPagingWhenPageLengthZero() {
+        ManagedUser user = createManagedUserWithTokens("admin", 3);
+        when(userRegistry.getAll()).thenReturn(List.of(user));
+
+        // pagelength 0 means return all
+        Response response = userResource.getAllApiTokens(null, 0, 0, null, null);
+        assertThat(response.getStatus(), is(200));
+    }
+
+    @Test
+    public void testGetAllApiTokensFilterByUser() {
+        ManagedUser user1 = createManagedUserWithTokens("admin", 2);
+        ManagedUser user2 = createManagedUserWithTokens("john", 1);
+        when(userRegistry.getAll()).thenReturn(List.of(user1, user2));
+
+        Response response = userResource.getAllApiTokens("john", 0, 0, null, null);
+        assertThat(response.getStatus(), is(200));
+    }
+
+    @Test
+    public void testGetAllApiTokensOrderBy() {
+        ManagedUser user = createManagedUserWithTokens("admin", 3);
+        when(userRegistry.getAll()).thenReturn(List.of(user));
+
+        Response response = userResource.getAllApiTokens(null, 0, 0, "name", "asc");
+        assertThat(response.getStatus(), is(200));
+    }
+
+    // --- GET /auth/users/{userId}/apitokens ---
+
+    @Test
+    public void testGetUserApiTokensReturnsTokensForUser() {
+        ManagedUser user = createManagedUserWithTokens("admin", 2);
+        when(userRegistry.get("admin")).thenReturn(user);
+
+        Response response = userResource.getUserApiTokens("admin");
+
+        assertThat(response.getStatus(), is(200));
+    }
+
+    @Test
+    public void testGetUserApiTokensReturns404WhenUserNotFound() {
+        when(userRegistry.get("unknown")).thenReturn(null);
+
+        Response response = userResource.getUserApiTokens("unknown");
+
+        assertThat(response.getStatus(), is(404));
+    }
+
+    @Test
+    public void testGetUserApiTokensReturns400WhenNotManagedUser() {
+        User mockUser = when(org.mockito.Mockito.mock(User.class).getName()).thenReturn("external").getMock();
+        when(userRegistry.get("external")).thenReturn(mockUser);
+
+        Response response = userResource.getUserApiTokens("external");
+
+        assertThat(response.getStatus(), is(400));
+    }
+
+    // --- DELETE /auth/users/{userId}/apitokens/{tokenName} ---
+
+    @Test
+    public void testRevokeUserApiTokenSuccess() {
+        ManagedUser user = createManagedUserWithTokens("admin", 2);
+        when(userRegistry.get("admin")).thenReturn(user);
+
+        Response response = userResource.revokeUserApiToken("admin", "token-0");
+
+        assertThat(response.getStatus(), is(200));
+        verify(userRegistry).removeUserApiToken(eq(user), any(UserApiToken.class));
+    }
+
+    @Test
+    public void testRevokeUserApiTokenReturns404WhenUserNotFound() {
+        when(userRegistry.get("unknown")).thenReturn(null);
+
+        Response response = userResource.revokeUserApiToken("unknown", "token-0");
+
+        assertThat(response.getStatus(), is(404));
+        verify(userRegistry, never()).removeUserApiToken(any(), any());
+    }
+
+    @Test
+    public void testRevokeUserApiTokenReturns404WhenTokenNotFound() {
+        ManagedUser user = createManagedUserWithTokens("admin", 1);
+        when(userRegistry.get("admin")).thenReturn(user);
+
+        Response response = userResource.revokeUserApiToken("admin", "nonexistent");
+
+        assertThat(response.getStatus(), is(404));
+        verify(userRegistry, never()).removeUserApiToken(any(), any());
+    }
+
     // --- Helper methods ---
 
     private ManagedUser createManagedUser(String name, Set<String> roles) {
         ManagedUser user = new ManagedUser(name, "salt", "hash");
         user.setRoles(roles);
+        return user;
+    }
+
+    private ManagedUser createManagedUserWithSessions(String name, int sessionCount) {
+        ManagedUser user = createManagedUser(name, Set.of("administrator"));
+        List<UserSession> sessions = new ArrayList<>();
+        for (int i = 0; i < sessionCount; i++) {
+            sessions.add(new UserSession("sess" + i + "-uuid-" + i, "refresh" + i, "client" + i,
+                    "http://localhost:8080", "admin"));
+        }
+        user.setSessions(sessions);
+        return user;
+    }
+
+    private ManagedUser createManagedUserWithTokens(String name, int tokenCount) {
+        ManagedUser user = createManagedUser(name, Set.of("administrator"));
+        List<UserApiToken> tokens = new ArrayList<>();
+        for (int i = 0; i < tokenCount; i++) {
+            tokens.add(new UserApiToken("token-" + i, "hashed-token-" + i, "admin"));
+        }
+        user.setApiTokens(tokens);
         return user;
     }
 }
