@@ -10,12 +10,12 @@
 | Version | Date | Changes |
 |---------|------|---------|
 | 2.0 | 2026-08-27 | Updated based on our discussion: |
-| | | — **Nadahar:** FR-11.1 flipped to "system by default" (rules don't run as user unless explicitly configured). Added FR-18 (Sensitive Action Protection) with TOTP/master password step-up auth. Emphasized offline-only second factors. |
-| | | — **rlkoshak:** NFR-2 rescaled to 5000+ items / 10+ roles. FR-6.1 clarified to include plain groups (not just semantic model). FR-7.8 added for log streams (all-or-nothing, separate permission). FR-11.3 added for rule-scoped permissions. Added UC-6 (LLM/agent access). Fixed FR-10.1 (cloud already passes user identity in event source chain). |
-| | | — **pacive:** Added `action` (Thing Actions) to FR-5.2. Expanded action levels from 3 to 4: read/command/edit/admin (FR-5.4-5.5). Added FR-6.5 (Thing Action inheritance). Added FR-11.4-11.5 (rule capability allowlist). Added passkeys note to FR-18.10. |
-| | | — **glen_m :** Added FR-5.10 (guest role for unauthenticated users, replaces boolean `implicitUserRole`). |
-| | | — **davek145 :** Added FR-1.10 (mTLS / client certificate auth for wall tablets and IoT devices). Added FR-2.9 (reverse proxy / oauth2-proxy SSO support). Added FR-2.10 (LDAP/LDAPS as auth backend). |
-| | | — **florian-h05:** Added Section 6 (Implementation Priority: Items/Pages/Sitemaps first, Things/Rules deferred). |
+| | | **Nadahar:** FR-11.1 flipped to "system by default" (rules don't run as user unless explicitly configured). Added FR-18 (Sensitive Action Protection) with TOTP/master password step-up auth. Emphasized offline-only second factors. |
+| | | **rlkoshak:** NFR-2 rescaled to 5000+ items / 10+ roles. FR-6.1 clarified to include plain groups (not just semantic model). FR-7.8 added for log streams (all-or-nothing, separate permission). FR-11.3 added for rule-scoped permissions. Added UC-6 (LLM/agent access). Fixed FR-10.1 (cloud already passes user identity in event source chain). |
+| | | **pacive:** Added `action` (Thing Actions) to FR-5.2. Expanded action levels from 3 to 4: read/command/edit/admin (FR-5.4-5.5). Added FR-6.5 (Thing Action inheritance). Added FR-11.4-11.5 (rule capability allowlist). Added passkeys note to FR-18.10. |
+| | | **glen_m :** Added FR-5.10 (guest role for unauthenticated users, replaces boolean `implicitUserRole`). |
+| | | **davek145 :** Added FR-1.10 (mTLS / client certificate auth for wall tablets and IoT devices). Added FR-2.9 (reverse proxy / oauth2-proxy SSO support). Added FR-2.10 (LDAP/LDAPS as auth backend). |
+| | | **florian-h05:** Added Section 6 (Implementation Priority: Items/Pages/Sitemaps first, Things/Rules deferred). |
 | 1.0 | 2026-08-24 | Initial version shared for review. Problem statement, current state (verified against code in openhab-core, openhab-webui, openhab-android, openhab-cloud), FR-1 through FR-17, NFR-1 through NFR-14, use cases UC-1 through UC-5. |
 
 ---
