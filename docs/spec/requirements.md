@@ -198,6 +198,7 @@ This is a problem for multi-user households and shared environments. The `visibl
 | FR-11.3 | Individual rules MAY be assigned their own permission scope, restricting which resources the rule can access regardless of the triggering context. When both a triggering user's scope and a rule's own scope exist, the most restrictive wins (intersection). |
 | FR-11.4 | A **rule capability allowlist** restricts which dangerous scripting actions (e.g., `executeCommandLine`, `sendHttpRequest`, `sendMail`) a rule can invoke. Capabilities not on the allowlist are denied within that rule's execution. Default for system-scoped rules: all capabilities allowed. Default for user-scoped rules: restricted to safe operations. |
 | FR-11.5 | FR-11.2 applies to all restricted operations — not just item access but also Thing Actions and scripting capabilities outside the rule's allowlist. |
+| FR-11.6 | **Rule-mediated escalation must be named.** Because rules run as `system` by default (FR-11.1), an item-level ACL does not contain a rule's side-effects: a user permitted to `command` a trigger item can indirectly cause a system rule to act on items they cannot access. The permission model and its documentation MUST state this explicitly. Mitigations: gate the *trigger* item at the privilege of the rule's effect, and/or apply per-rule scoping (FR-11.3) or capability allowlists (FR-11.4). Item ACLs alone are not a containment boundary for automation side-effects. |
 
 ### FR-12: Administration & Auditability
 

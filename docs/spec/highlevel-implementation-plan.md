@@ -89,6 +89,8 @@
   - `user` — builtIn=true, permissions: `(ITEM, All, COMMAND)`, `(PAGE, All, READ)`, `(SITEMAP, All, READ)` (matches current effective behavior)
 - Tests: unit tests for RoleRegistry CRUD, permission hierarchy (`implies()`), selector matching
 
+**Reuse note (see design.md §3 "Reusing the merged voice permission primitive"):** #5626 (merged) already defines `ItemPermission` (`NO_ACCESS < READ_ONLY < READ_WRITE`) + `ItemPermissionResolver` — metadata-driven, cached, change-listener — in the voice bundle, which florian pointed at in the forum thread. PR 0.1 should *generalize that into core auth* rather than re-invent a parallel `ItemPermission`/`Action` type and cache. `READ_ONLY`/`READ_WRITE`/`NO_ACCESS` map onto the `read → command → edit → admin` hierarchy; the merged cache + registry-change invalidation is exactly the `<5ms` (NFR-1) machinery and the change-listener the event-stream filters (PR 1.3) need.
+
 **What this does NOT do:** No enforcement, no REST API, no UI changes. Just the storage layer.
 
 ### PR 0.2: AuthorizationService Interface + No-Op Implementation

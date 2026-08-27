@@ -350,6 +350,12 @@ When RBAC is disabled: all checks return PERMIT (today's behavior).
 
 ## 3. Key Components
 
+### Reusing the merged voice permission primitive (#5626)
+
+florian-h05's #5626 (merged to `main`, 2026-06-08) already provides an item-permission model — `ItemPermission` (`NO_ACCESS < READ_ONLY < READ_WRITE`, ordinal ordering is the priority), an `ItemPermissionResolver` interface, and a metadata-driven impl with a change-invalidated cache and an access-change listener — currently under `org.openhab.core.voice.security` / `...voice.internal.security`. The impl reads its policy from item `Metadata` (namespace `voiceSystem`, property `permission`) via `MetadataRegistry`, caches per-item results, invalidates on item- and metadata-registry changes, and exposes `addItemAccessChangeListener(Runnable)`.
+
+Rather than introduce a parallel `Permission`/`Action` model, the foundation phase **generalizes this primitive out of the voice bundle into core auth**: move the interface + enum to `org.openhab.core.auth`, generalize the metadata namespace (`voiceSystem` → an `acl`/`auth` namespace), keep the cache + registry-change invalidation, and have the voice bundle consume the generalized resolver. `READ_WRITE`/`READ_ONLY`/`NO_ACCESS` map onto the `read → command → edit → admin` hierarchy (voice never needed `command`/`edit`/`admin`, so those are additive, not a conflict). Net effect: the item read/command evaluator (PR 1.1) and the event-stream filters (PR 1.3) build on merged, tested code and inherit its cache and its change-listener — the exact machinery §7 needs to refresh a subscriber's filter on permission change.
+
 ### AuthorizationService (new)
 
 Central interface — all authorization decisions flow through here. REST resources, SSE, servlets, and the rule engine call this service. They never implement policy logic themselves (NFR-5).
@@ -483,6 +489,7 @@ LDAP configuration (PID `org.openhab.auth.ldap`):
 | REST command | `AuthorizationService.isPermitted(…, "command")` | 403 if unauthorized |
 | SSE (MainUI) | Filter events before delivery | User only sees events for permitted resources. MainUI's item state tracker (`/rest/events/states`) filters the tracked item list. |
 | SSE (Sitemaps) | Filter events before delivery | Sitemap event subscriptions (`/rest/sitemaps/events/`) must only deliver events for items the user can access. Today this endpoint exposes all item events regardless of sitemap scope — RBAC must fix this. Mobile apps (Android, iOS) rely on this path. |
+| Event WebSocket (`/ws`) | Filter events before delivery | `EventWebSocket` / `TopicFilterMapper` in `org.openhab.core.io.websocket` deliver the same item events as SSE over WebSocket (client-chosen topic/type/source filters only — no auth filtering today). Apply the same per-subscriber readable-resource filter as the SSE paths, else this is an unfiltered read channel bypassing SSE enforcement. |
 | Sitemaps | `SitemapResource` filtering | Sitemap list filtered per user permissions. Within a sitemap, widgets referencing unauthorized items are hidden or show placeholder state. This directly affects mobile app users who use native sitemap rendering, not the webview. |
 | Servlets | Check auth before serving | 401/403 if unauthorized |
 | Rules (opt-in) | Scoped execution context | Rule fails gracefully if it accesses unauthorized resources |
@@ -500,6 +507,8 @@ Two SSE paths exist with different filtering needs:
 
 **General event stream** (`/rest/events`): Topic-based subscription. With RBAC, events are filtered per user's readable resource set before delivery.
 
+**Event WebSocket path** (`/ws`, `org.openhab.core.io.websocket` `EventWebSocket`): the WebSocket equivalent of `/rest/events`, used by openhab-js and Main UI. It carries the same item events; today it applies only client-chosen topic/type/source filters, no auth filter. It must apply the identical per-subscriber filter as the SSE paths — resolve the readable-resource set (or a cached predicate) at connection, filter each event before delivery, refresh on permission change. Filtering SSE but not `/ws` leaves an unfiltered read channel.
+
 For all paths:
 1. On connection, resolve user's readable resource set (or cache a permission predicate)
 2. Before delivering each event, check if the event's resource is in the user's permitted set
@@ -514,6 +523,8 @@ For scale (5000+ items), the filter uses a precomputed allowed-resource set rath
 - **Default:** Rules run as `SYSTEM` — full access, no permission checks.
 - **Opt-in user-scoped:** A rule can be configured to run with the triggering user's permissions. The rule engine wraps execution with an `Authentication` context, and any resource access within the rule goes through `AuthorizationService`. This applies to all restricted operations — not just item access but also Thing Actions and scripting capabilities outside the rule's allowlist.
 - **Rule capability allowlist:** Restricts dangerous operations (`executeCommandLine`, `sendHttpRequest`, etc.) per rule. System-scoped: all allowed. User-scoped: restricted by default.
+
+**Security note — rule-mediated escalation.** With the `SYSTEM` default, item ACLs are not a containment boundary: `command` on a trigger item can drive a system rule that writes restricted items the user cannot access. A deployer who ACLs only the "dangerous" item and leaves its trigger open has an open escalation path and won't know it. Deployers must gate trigger items at the effect's privilege, or use per-rule scoping (FR-11.3) / capability allowlists (FR-11.4). This is stated as a requirement (FR-11.6) so the documentation names the threat rather than leaving it implicit.
 
 **Capability allowlist data model:**
 
