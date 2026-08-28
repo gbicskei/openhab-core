@@ -475,6 +475,8 @@ LDAP configuration (PID `org.openhab.auth.ldap`):
 
 ## 6. Enforcement Points
 
+**Core principle: Items are the fundamental authorization boundary.** Pages and Sitemaps are containers — access to a container does not imply access to all Items within it. When a user can read a Page or Sitemap but not all Items on it, unauthorized Items are filtered out (no state returned via REST or SSE). The container itself remains accessible.
+
 | Layer | Mechanism | Behavior with RBAC ON |
 |-------|-----------|----------------------|
 | REST GET | `AuthorizationService.filterPermitted()` | Returns only authorized resources |
@@ -482,7 +484,7 @@ LDAP configuration (PID `org.openhab.auth.ldap`):
 | REST POST/PUT/DELETE | `AuthorizationService.isPermitted()` | 403 if unauthorized |
 | REST command | `AuthorizationService.isPermitted(…, "command")` | 403 if unauthorized |
 | SSE (MainUI) | Filter events before delivery | User only sees events for permitted resources. MainUI's item state tracker (`/rest/events/states`) filters the tracked item list. |
-| SSE (Sitemaps) | Filter events before delivery | Sitemap event subscriptions (`/rest/sitemaps/events/`) must only deliver events for items the user can access. Today this endpoint exposes all item events regardless of sitemap scope — RBAC must fix this. Mobile apps (Android, iOS) rely on this path. |
+| SSE (Sitemaps) | Filter `SitemapWidgetEvent` in `SitemapResource.onEvent()` | Sitemap SSE (`/rest/sitemaps/events/`) captures user `Authentication` at subscription time. Before broadcasting each `SitemapWidgetEvent`, checks if the user can read the event's item. Unauthorized item events are suppressed. `WidgetsChangeListener` and subscription model remain unchanged — filtering at the delivery layer keeps the change small. Mobile apps (Android, iOS) rely on this path. |
 | Sitemaps | `SitemapResource` filtering | Sitemap list filtered per user permissions. Within a sitemap, widgets referencing unauthorized items are hidden or show placeholder state. This directly affects mobile app users who use native sitemap rendering, not the webview. |
 | Servlets | Check auth before serving | 401/403 if unauthorized |
 | Rules (opt-in) | Scoped execution context | Rule fails gracefully if it accesses unauthorized resources |

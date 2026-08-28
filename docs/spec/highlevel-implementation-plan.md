@@ -173,14 +173,23 @@
 
 ### PR 1.3: SSE Event Filtering
 
-**Bundle:** `org.openhab.core.io.rest.sse`
+**Bundles:** `org.openhab.core.io.rest.sse`, `org.openhab.core.io.rest.sitemap`
 
-- In `SseResource`: capture the `Authentication` from `SecurityContext` at connection time
-- For the item state tracker (`/rest/events/states`): filter the item list in `POST /rest/events/states/{connectionId}` against the user's item permissions
-- For the general event stream (`/rest/events`): filter emitted events — only send item events for items the user can read, page events for accessible pages
-- For sitemap events: filter to only deliver events for items the user can access within that sitemap
-- Gated behind `authorizationService.isEnabled()`
-- Tests: verify filtered vs. unfiltered event delivery
+Two separate SSE systems exist in different bundles and need independent filtering:
+
+**MainUI SSE** (`org.openhab.core.io.rest.sse` — `SseResource`):
+- Capture the `Authentication` from `SecurityContext` at connection time
+- Item state tracker (`/rest/events/states`): filter the item list in `POST /rest/events/states/{connectionId}` against the user's item permissions
+- General event stream (`/rest/events`): filter emitted events — only send item events for items the user can read, page events for accessible pages
+
+**Sitemap SSE** (`org.openhab.core.io.rest.sitemap` — `SitemapResource`):
+- Capture the `Authentication` at subscription time (`POST /rest/sitemaps/events/subscribe`) and store it on the subscription
+- Filter `SitemapWidgetEvent` delivery in `SitemapResource.onEvent()`: before broadcasting, check if the user can read the event's item. If not, suppress the event (or strip item data). This is Item-level filtering on widget-level events — access to a sitemap does not imply access to all items on it.
+- The `WidgetsChangeListener` and subscription model remain unchanged — filtering happens at the delivery layer, not the listener layer. This keeps the change small and avoids breaking the shared-listener optimization.
+
+Both paths gated behind `authorizationService.isEnabled()`
+
+- Tests: verify filtered vs. unfiltered event delivery for both MainUI and sitemap SSE paths
 
 ### PR 1.4: Guest Role + implicitUserRole Migration
 
