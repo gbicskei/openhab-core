@@ -179,7 +179,7 @@ Two separate SSE systems exist in different bundles and need independent filteri
 
 **MainUI SSE** (`org.openhab.core.io.rest.sse` — `SseResource`):
 - Capture the `Authentication` from `SecurityContext` at connection time
-- Item state tracker (`/rest/events/states`): filter the item list in `POST /rest/events/states/{connectionId}` against the user's item permissions
+- Item state tracker (`/rest/events/states`): when a client POSTs an item list to track, reject with 403 if any items are unauthorized. Optionally support a permission-aware filter (configured after connect) that explicitly opts into receiving only permitted items — for clients designed to handle partial results. Other clients get a clear rejection by default.
 - General event stream (`/rest/events`): filter emitted events — only send item events for items the user can read, page events for accessible pages
 
 **Sitemap SSE** (`org.openhab.core.io.rest.sitemap` — `SitemapResource`):
