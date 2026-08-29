@@ -522,6 +522,8 @@ For scale (5000+ items), the filter uses a precomputed allowed-resource set rath
 - **Opt-in user-scoped:** A rule can be configured to run with the triggering user's permissions. The rule engine wraps execution with an `Authentication` context, and any resource access within the rule goes through `AuthorizationService`. This applies to all restricted operations — not just item access but also Thing Actions and scripting capabilities outside the rule's allowlist.
 - **Rule capability allowlist:** Restricts dangerous operations (`executeCommandLine`, `sendHttpRequest`, etc.) per rule. System-scoped: all allowed. User-scoped: restricted by default.
 
+**Security note — rule-mediated escalation.** With the `SYSTEM` default, item ACLs are not a containment boundary: `command` on a trigger item can drive a system rule that writes restricted items the user cannot access. A deployer who ACLs only the "dangerous" item and leaves its trigger open has an open escalation path and won't know it. Deployers must gate trigger items at the effect's privilege, or use per-rule scoping (FR-11.3) / capability allowlists (FR-11.4). This is stated as a requirement (FR-11.6) so the documentation names the threat rather than leaving it implicit.
+
 **Capability allowlist data model:**
 
 ```json
