@@ -15,7 +15,7 @@
 - Java 21, OSGi Declarative Services, JSON DB storage.
 - `@RolesAllowed` stays as a coarse first gate. Fine-grained RBAC is a separate layer on top.
 - The `AuthorizationService` interface lives in `org.openhab.core` (the API bundle) so any bundle can depend on it. The implementation lives in a separate bundle.
-- Permission evaluation must be cached (Caffeine or similar) to meet the <5ms NFR.
+- Permission evaluation cached in a HashMap, cleared on registry changes (Items CRUD, role/permission changes). No new dependencies (no Caffeine) — same pattern as voice system permission caching.
 
 ---
 
@@ -55,6 +55,7 @@
 - Test `SseResource` access:
   - User role can connect and receive events
   - Topic-based filtering works as expected
+- Note: `EventWebSocket` also exists — existing WS filter tests should already cover it. Verify, don't duplicate.
 - Test `TokenResource`:
   - Authorization code exchange (happy path)
   - PKCE validation (valid, invalid, missing)
@@ -77,8 +78,8 @@
   - `RoleDefinition` — name, description, `Set<Permission>`, builtIn flag
   - `Permission` record — `(ResourceType, Selector, Action)`
   - `ResourceType` enum — `ITEM, PAGE, SITEMAP` (start narrow; others added later)
-  - `Action` enum — `READ, COMMAND, EDIT, ADMIN` with `implies()` hierarchy
-  - `Selector` sealed interface — `All`, `ById`, `ByTag`, `ByGroup`, `ByLocation`
+  - `Action` — abstract per ResourceType. Examples: Items have `READ, COMMAND, EDIT`; Pages have `READ, EDIT, MANAGE` (or `READ, UPDATE, CREATE, DELETE`). Each ResourceType defines its own valid actions.
+  - `Selector<T, E>` — generic interface with `boolean match(T type, E entity)`, implemented per ResourceType. Examples: Items use ById, ByGroup, ByTag, ByLocation; Pages use ById and can leverage existing `visibleTo` config. High flexibility without a one-size-fits-all model.
   - `RoleRegistry` interface extending `Registry<RoleDefinition, String>`
   - `RoleProvider` interface extending `Provider<RoleDefinition>`
 - Add implementation:
@@ -100,13 +101,14 @@
     - `boolean isEnabled()`
     - `boolean hasPermission(Authentication auth, ResourceType type, String resourceId, Action action)`
     - `<T> List<T> filterAuthorized(Authentication auth, Collection<T> resources, ResourceType type, Action action, Function<T, String> idExtractor)`
-  - `PermissionEvaluator` interface — pluggable per resource type
+  - `PermissionEvaluator` interface — pluggable per resource type, works with the type-specific Action and Selector implementations
 - Add implementation:
-  - `AuthorizationServiceImpl` — delegates to registered `PermissionEvaluator` instances
+  - `AuthorizationServiceImpl` — delegates to registered `PermissionEvaluator` instances per ResourceType
   - Default: `isEnabled()` returns `false` — all `hasPermission()` calls return `true`
   - Config PID `org.openhab.auth.rbac` with `enabled=false`
 - No-op PermissionEvaluators registered for ITEM, PAGE, SITEMAP (stubs that always allow)
 - Tests: unit tests for the service interface, verify no-op behavior
+- **Next step: open a draft PR or GitHub issue with just the interfaces so technical details can be discussed at the code level.**
 
 **What this does NOT do:** No actual permission checks. Just the service interface wired up and ready.
 
@@ -192,6 +194,8 @@ Both paths gated behind `authorizationService.isEnabled()`
 **Wildcard subscriptions require admin role.** Subscribing to all items/events via wildcard or broad topic filters is restricted to admin users. Non-admin users must subscribe to explicit item lists. This applies to both SSE and WebSocket. Avoids the edge case where permissions change after a wildcard subscription is active.
 
 **WebSocket** follows the same RBAC rules as SSE. Explicit subscriptions are permission-checked; unauthorized filter messages are NACKed (connection stays open). Wildcards require admin.
+
+**Voice control** is also an enforcement point — voice commands targeting items must be checked against the user's permissions. The voice system already has a permission caching pattern that can be extended.
 
 - Tests: verify filtered vs. unfiltered event delivery for both MainUI and sitemap SSE paths. Verify wildcard rejection for non-admin users.
 
