@@ -189,7 +189,11 @@ Two separate SSE systems exist in different bundles and need independent filteri
 
 Both paths gated behind `authorizationService.isEnabled()`
 
-- Tests: verify filtered vs. unfiltered event delivery for both MainUI and sitemap SSE paths
+**Wildcard subscriptions require admin role.** Subscribing to all items/events via wildcard or broad topic filters is restricted to admin users. Non-admin users must subscribe to explicit item lists. This applies to both SSE and WebSocket. Avoids the edge case where permissions change after a wildcard subscription is active.
+
+**WebSocket** follows the same RBAC rules as SSE. Explicit subscriptions are permission-checked; unauthorized filter messages are NACKed (connection stays open). Wildcards require admin.
+
+- Tests: verify filtered vs. unfiltered event delivery for both MainUI and sitemap SSE paths. Verify wildcard rejection for non-admin users.
 
 ### PR 1.4: Guest Role + implicitUserRole Migration
 

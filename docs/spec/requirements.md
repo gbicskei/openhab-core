@@ -54,10 +54,10 @@ This is a problem for multi-user households and shared environments. The `visibl
 3. **Granular permissions** — read, command, write/admin per resource or resource group.
 4. **Server-side enforcement** — all access control happens on the server. Client-side filtering is a nice-to-have, not a substitute.
 5. **Event stream filtering** — SSE and WebSocket only deliver events for resources the user is allowed to see.
+6. **Backward compatibility** — existing installs keep working as-is. RBAC is opt-in. Official UIs (Main UI, Basic UI, mobile apps) must not break.
 
 ### Should Have
 
-6. **Backward compatibility** — existing installs keep working as-is. RBAC is opt-in.
 7. **Semantic model integration** — use the existing model (Locations, Equipment, Properties) for permission inheritance so you don't have to assign permissions item-by-item.
 8. **Rule execution context** — rules run as system by default but can optionally be scoped to the triggering user's permissions when needed.
 9. **Servlet security** — bring ChartServlet, IconServlet, AudioServlet under the same auth framework as REST.
@@ -158,6 +158,8 @@ This is a problem for multi-user households and shared environments. The `visibl
 | FR-7.6 | Servlets (Chart, Icon, Audio) check authorization before serving content. |
 | FR-7.7 | Standard `Authorization: Bearer <token>` is the primary auth method. |
 | FR-7.8 | Log streams (delivered via WebSocket) require a separate permission. Per-user log filtering is not feasible — access is all-or-nothing, gated by a dedicated role or permission (e.g., `logs:read`). |
+| FR-7.9 | Wildcard event subscriptions (subscribe to all items/events via broad topic filters) require admin role. Non-admin users must subscribe to explicit item/resource lists, which are validated at subscription time. |
+| FR-7.10 | WebSocket connections follow the same RBAC rules as SSE. Explicit subscriptions are permission-checked at filter setup time; unauthorized filter requests are rejected (NACK). Wildcard access requires admin. |
 
 ### FR-8: UI Integration
 

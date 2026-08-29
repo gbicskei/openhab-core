@@ -494,18 +494,23 @@ LDAP configuration (PID `org.openhab.auth.ldap`):
 
 ## 7. Event Stream Filtering
 
-Two SSE paths exist with different filtering needs:
+Two SSE paths and WebSocket exist with different filtering needs:
 
-**MainUI path** (`/rest/events/states`): Clients POST which items they want to track, then receive only those states. RBAC filters the item list in the POST — the client only tracks items they're permitted to read.
+**MainUI path** (`/rest/events/states`): Clients POST which items they want to track, then receive only those states. When a client POSTs an item list, reject with 403 if any items are unauthorized. Optionally support a permission-aware filter (configured after connect) that explicitly opts into receiving only permitted items — for clients designed to handle partial results.
 
 **Sitemap path** (`/rest/sitemaps/events/`): Clients subscribe to a sitemap and receive widget-level events. Today this exposes events for ALL items, even those outside the subscribed sitemap. With RBAC, events must be filtered to only include items the user can access. This is the primary path for mobile apps (Android, iOS) using native sitemap rendering.
 
 **General event stream** (`/rest/events`): Topic-based subscription. With RBAC, events are filtered per user's readable resource set before delivery.
 
-For all paths:
-1. On connection, resolve user's readable resource set (or cache a permission predicate)
-2. Before delivering each event, check if the event's resource is in the user's permitted set
-3. On permission change events, refresh the filter for affected connections
+**WebSocket**: The same RBAC rules apply as for SSE. Explicit item/thing subscriptions are permission-checked at filter setup time. If unauthorized items are requested, the filter message is NACKed (not the connection itself). The implementation detail differs from SSE (message-based filter setup vs. URL params) but the permission model is identical.
+
+**Wildcard subscriptions require admin role.** Subscribing to all items/events via wildcard (broad topic filters, "subscribe to everything") is restricted to admin users. Non-admin users must subscribe to explicit item lists, which are validated at subscription time. This avoids the edge case where permissions change after a wildcard subscription is established (new item added that the user can't access — can't reject an active subscription, can't silently exclude, can't close the connection).
+
+For explicit (non-wildcard) subscriptions:
+1. On connection/subscription, validate the requested items against the user's permissions
+2. Reject (403 / NACK) if any unauthorized items are in the list
+3. Before delivering each event, check if the event's resource is in the user's permitted set
+4. On permission change events, refresh the filter for affected connections
 
 For scale (5000+ items), the filter uses a precomputed allowed-resource set rather than per-event authorization calls.
 
